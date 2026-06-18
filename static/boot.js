@@ -1538,6 +1538,20 @@ document.addEventListener('keydown',async e=>{
     // stream running on its own session; the user just gets a fresh blank one.
     await newSession();await renderSessionList();closeMobileSidebar();$('msg').focus();
   }
+  if((e.metaKey||e.ctrlKey)&&(e.key==='n'||e.key==='N')){
+    const t=e.target;
+    const isText=t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable);
+    if(isText)return;
+    e.preventDefault();
+    if(S.session
+       && (S.session.message_count||0)===0
+       && !S.busy
+       && !S.session.active_stream_id
+       && !S.session.pending_user_message){
+      $('msg').focus();return;
+    }
+    await newSession();await renderSessionList();closeMobileSidebar();$('msg').focus();
+  }
   if(e.key==='Escape'){
     // Close onboarding overlay if open (skip/dismiss the wizard)
     const onboardingOverlay=$('onboardingOverlay');

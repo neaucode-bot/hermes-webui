@@ -196,7 +196,7 @@
       <div class="panel-head">
         <span data-i18n="tab_chat">Chat</span>
         <div class="panel-head-actions">
-          <button class="panel-head-btn has-tooltip has-tooltip--bottom-right" id="btnNewChat" data-tooltip="New conversation (Cmd+K)" data-i18n-title="new_conversation" aria-label="New conversation">
+          <button class="panel-head-btn has-tooltip has-tooltip--bottom-right" id="btnNewChat" data-tooltip="New conversation (Cmd+N)" data-i18n-title="new_conversation_shortcut" aria-label="New conversation">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
         </div>
@@ -1387,6 +1387,10 @@
               <button class="sm-btn" id="btnRegisterPasskey" onclick="registerPasskey()" style="width:100%;padding:8px;font-weight:600">Add passkey</button>
               <button class="sm-btn" id="btnGoPasswordless" onclick="goPasswordless()" style="display:none;margin-top:8px;width:100%;padding:8px;font-weight:600;color:#e8a030;border-color:rgba(232,160,48,.3)">Go passwordless</button>
               <div id="passkeyList" style="margin-top:8px;font-size:12px;color:var(--muted)">No passkeys registered.</div>
+            </div>
+            <div class="settings-field" id="settingsPwaIosHint" style="display:none;margin-top:18px;padding:12px 14px;border:1px solid var(--border2);border-radius:8px;background:var(--code-bg)">
+              <label data-i18n="settings_pwa_ios_hint_title">Install on iPhone or iPad</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.45" data-i18n="settings_pwa_ios_hint_desc">Open this page in Safari, tap Share, then choose Add to Home Screen. The installed app will open at this LAN address.</div>
             </div>
             <div class="settings-field" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
               <label for="settingsDashboardMode" data-i18n="settings_label_dashboard_mode">Official Hermes Dashboard</label>

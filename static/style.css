@@ -943,6 +943,7 @@
   .pwa-standalone body{-webkit-tap-highlight-color:transparent;}
   .app-titlebar-new-chat{display:none;}
   .pwa-standalone .app-titlebar-reload{display:inline-flex;}
+  .pwa-ios:not(.pwa-standalone) #settingsPwaIosHint{display:block!important;}
   .pwa-offline .app-titlebar::after{content:'';position:absolute;left:50%;bottom:5px;width:5px;height:5px;border-radius:999px;background:var(--warning);box-shadow:0 0 0 3px color-mix(in srgb,var(--warning) 22%,transparent);transform:translateX(-50%);}
   .pwa-resumed .app-titlebar-title{animation:pwa-title-resume .6s ease-out;}
   @keyframes pwa-title-resume{0%{opacity:.65;}100%{opacity:1;}}

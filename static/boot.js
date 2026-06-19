@@ -1435,7 +1435,17 @@ let _imeComposing=false;
   _c.addEventListener('compositionend',()=>{setTimeout(()=>{_imeComposing=false;},0);});
   _c.addEventListener('blur',()=>{_imeComposing=false;});
 })();
-function _isImeEnter(e){return e.isComposing||e.keyCode===229||_imeComposing;}
+// iOS Safari (and some Android keyboards) report `keyCode === 229` on the
+// keydown for a real Return press whenever predictive text / autocorrect has
+// marked text pending — even for plain Latin input with no IME involved. The
+// blanket `keyCode === 229` guard then swallowed that Enter and the textarea
+// inserted a newline instead of sending (the iOS "Return makes a newline"
+// bug). A genuine CJK commit is still caught by `isComposing` (during the
+// composition) and the `_imeComposing` flag (the Safari trailing-commit race
+// on the #msg composer), so the stateless 229 signal is only trusted when the
+// event is NOT itself the Enter key — preventing the false positive without
+// losing real composition protection.
+function _isImeEnter(e){return e.isComposing||(e.keyCode===229&&e.key!=='Enter')||_imeComposing;}
 window._isImeEnter=_isImeEnter;
 function _isVirtualKeyboardLikelyOpen(){
   const vv=window.visualViewport;
@@ -1474,11 +1484,13 @@ $('msg').addEventListener('keydown',e=>{
     }
   }
   // Send key: respect user preference.
-  // On touch-primary devices with the software keyboard open, default to
-  // Enter = newline since there's no physical Shift key. Hardware keyboards on
-  // tablets keep desktop behavior when the viewport is not keyboard-shrunk.
-  // The 'ctrl+enter' setting also uses this behavior (Enter = newline).
-  // Users can override in Settings by explicitly choosing 'enter' mode.
+  // On touch-primary devices with the software keyboard open, the default
+  // 'enter' mode falls back to Enter = newline since there's no physical Shift
+  // key (you tap the Send button). Hardware keyboards on tablets keep desktop
+  // behavior when the viewport is not keyboard-shrunk. The 'ctrl+enter' setting
+  // also uses Enter = newline. Users who want Return to send on a phone/tablet
+  // soft keyboard pick the 'enter_always' mode, which opts out of this mobile
+  // fallback and sends on Enter everywhere (Shift+Enter still inserts newline).
   if(e.key==='Enter'){
     if(_isImeEnter(e)){return;}
     const isNumpadEnter=_isNumpadEnter(e);
@@ -1504,6 +1516,16 @@ document.addEventListener('keydown',async e=>{
     if(!isText&&typeof toggleSidebar==='function'&&_isDesktopWidth()){
       e.preventDefault();
       toggleSidebar();
+      return;
+    }
+  }
+  // Cmd/Ctrl+, opens Settings (macOS / cross-platform convention).
+  if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&!e.altKey&&e.key===','){
+    const t=e.target;
+    const isText=t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable);
+    if(!isText&&typeof switchPanel==='function'){
+      e.preventDefault();
+      if(_currentPanel!=='settings') switchPanel('settings');
       return;
     }
   }
@@ -1543,14 +1565,10 @@ document.addEventListener('keydown',async e=>{
     const isText=t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable);
     if(isText)return;
     e.preventDefault();
-    if(S.session
-       && (S.session.message_count||0)===0
-       && !S.busy
-       && !S.session.active_stream_id
-       && !S.session.pending_user_message){
-      $('msg').focus();return;
-    }
-    await newSession();await renderSessionList();closeMobileSidebar();$('msg').focus();
+    e.stopPropagation();
+    const btn=$('btnNewChat');
+    if(btn) btn.click();
+    return;
   }
   if(e.key==='Escape'){
     // Close onboarding overlay if open (skip/dismiss the wizard)
@@ -1582,7 +1600,7 @@ document.addEventListener('keydown',async e=>{
       $('msg').blur();
     }
   }
-});
+},{capture:true});
 const LARGE_TEXT_PASTE_CHAR_THRESHOLD=4000;
 const LARGE_TEXT_PASTE_LINE_THRESHOLD=100;
 function _largeTextPasteLineCount(text){
@@ -1969,7 +1987,6 @@ function applyBotName(){
     window._workspaceTodosTab=!!s.workspace_todos_tab;
     if(typeof _applyWorkspaceTodosTabVisibility==='function') _applyWorkspaceTodosTabVisibility();
     window._sidebarDensity=(s.sidebar_density==='detailed'?'detailed':'compact');
-    window._pinnedSessionsLimit=parseInt(s.pinned_sessions_limit||3,10)||3;
     window._inflightStateLimits={
       maxSessions:parseInt(s.inflight_state_max_sessions||8,10)||8,
       messages:parseInt(s.inflight_state_max_messages||24,10)||24,
@@ -2076,7 +2093,6 @@ function applyBotName(){
     if(typeof _applyWorkspaceTodosTabVisibility==='function') _applyWorkspaceTodosTabVisibility();
     window._sessionJumpButtonsEnabled=false;
     window._sidebarDensity='compact';
-    window._pinnedSessionsLimit=3;
     window._busyInputMode='queue';
     window._sessionEndlessScrollEnabled=false;
     window._autoScrollFollow=true;

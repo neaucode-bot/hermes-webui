@@ -171,6 +171,61 @@ def test_unsupported_provider_reports_followup_state(monkeypatch, tmp_path):
     assert "follow-up" in result["message"]
 
 
+def test_cursor_acp_quota_uses_cursor_dashboard_summary(monkeypatch, tmp_path):
+    """Cursor ACP should surface Total/API/Auto included usage in Providers."""
+    monkeypatch.setattr(profiles, "get_active_hermes_home", lambda: tmp_path)
+    old_cfg, old_mtime = _with_config(model={"provider": "cursor-acp"})
+
+    import api.providers as providers
+
+    payload = {
+        "individualUsage": {
+            "plan": {
+                "totalPercentUsed": 42.4,
+                "apiPercentUsed": 78.1,
+                "autoPercentUsed": 23.6,
+            }
+        }
+    }
+
+    monkeypatch.setattr(providers, "_fetch_cursor_usage_summary", lambda refresh=False: payload)
+    try:
+        result = providers.get_provider_quota()
+    finally:
+        _restore_config(old_cfg, old_mtime)
+
+    assert result["ok"] is True
+    assert result["provider"] == "cursor-acp"
+    assert result["supported"] is True
+    assert result["status"] == "available"
+    limits = result["account_limits"]
+    assert limits["title"] == "Cursor included usage"
+    assert [w["label"] for w in limits["windows"]] == ["Total", "API", "Auto"]
+    assert limits["windows"][0]["used_percent"] == 42
+    assert limits["windows"][1]["used_percent"] == 78
+    assert limits["windows"][2]["used_percent"] == 24
+
+
+def test_cursor_acp_quota_unavailable_when_cursor_not_signed_in(monkeypatch, tmp_path):
+    monkeypatch.setattr(profiles, "get_active_hermes_home", lambda: tmp_path)
+    old_cfg, old_mtime = _with_config(model={"provider": "cursor-acp"})
+
+    import api.providers as providers
+
+    monkeypatch.setattr(providers, "_fetch_cursor_usage_summary", lambda refresh=False: None)
+    try:
+        result = providers.get_provider_quota()
+    finally:
+        _restore_config(old_cfg, old_mtime)
+
+    assert result["ok"] is False
+    assert result["provider"] == "cursor-acp"
+    assert result["supported"] is True
+    assert result["status"] == "unavailable"
+    assert result["account_limits"]["available"] is False
+    assert "not signed in" in result["account_limits"]["unavailable_reason"].lower()
+
+
 def test_codex_account_usage_is_fetched_under_active_profile_home(monkeypatch, tmp_path):
     """Codex account limits must use the selected WebUI profile's HERMES_HOME."""
     monkeypatch.setattr(profiles, "get_active_hermes_home", lambda: tmp_path)

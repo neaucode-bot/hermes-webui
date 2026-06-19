@@ -65,6 +65,20 @@
     }
   });
 
+  function isTextInputTarget(t){
+    return t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable);
+  }
+  // Block the browser/PWA shell default for Cmd/Ctrl+N (new window) as early as
+  // possible. boot.js handles the actual new-chat action once the UI bundle loads.
+  function blockNativeNewWindowShortcut(e){
+    if(!(e.metaKey||e.ctrlKey)||e.altKey||e.shiftKey)return;
+    if(e.key!=='n'&&e.key!=='N')return;
+    if(isTextInputTarget(e.target))return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  window.addEventListener('keydown',blockNativeNewWindowShortcut,true);
+
   window.HermesPWA={
     isStandalone:isStandalone,
     syncMode:syncMode,

@@ -492,6 +492,23 @@ def test_mobile_rail_click_opens_sidebar_for_all_panels():
     )
 
 
+def test_mobile_settings_row_closes_sidebar_for_full_screen_pane():
+    """Selecting a settings section on phone must close the drawer and show main settings."""
+    panels_js = (REPO / "static" / "panels.js").read_text(encoding="utf-8")
+    fn_start = panels_js.index("function switchSettingsSection(")
+    fn_end = panels_js.index("function _buildSettingsIndex", fn_start)
+    block = panels_js[fn_start:fn_end]
+    assert "_currentPanel !== 'settings'" in block, (
+        "switchSettingsSection must only mutate panes while settings is active"
+    )
+    assert "!_isDesktopWidth()" in block, (
+        "Settings row navigation must be gated to mobile widths"
+    )
+    assert "closeMobileSidebar()" in block, (
+        "Settings row click must close the mobile sidebar so #mainSettings is full screen"
+    )
+
+
 def test_mobile_files_button_present():
     """Mobile files toggle button (#btnWorkspacePanelToggle.workspace-toggle-btn) must be in HTML and CSS."""
     assert 'id="btnWorkspacePanelToggle"' in HTML, \
@@ -593,6 +610,53 @@ def test_new_conversation_closes_mobile_sidebar():
     shortcut_block = "\n".join(boot_js.splitlines()[boot_js.splitlines().index(shortcut_line):boot_js.splitlines().index(shortcut_line)+24])
     assert "closeMobileSidebar" in shortcut_block, \
         "Cmd/Ctrl+K new chat shortcut must closeMobileSidebar() after creating the new session"
+
+
+def test_nested_child_session_click_closes_mobile_sidebar():
+    """Opening a nested child/subagent session must close the mobile drawer like a top-level row."""
+    sessions_js = (REPO / "static" / "sessions.js").read_text(encoding="utf-8")
+    idx = sessions_js.index("async function _openNestedSidebarSession(sessionRow){")
+    block = sessions_js[idx:idx + 700]
+    assert "closeMobileSidebar" in block, (
+        "_openNestedSidebarSession must closeMobileSidebar() before loadSession so nested "
+        "subagent clicks reveal the chat pane on mobile"
+    )
+    assert "await loadSession(sid, {skipLineageResolve:true});" in block
+    assert "const openChildSession=async(childSession)=>_openNestedSidebarSession(childSession);" in sessions_js
+    assert "_installNestedSidebarTouchActivate(mainBtn, child" in sessions_js
+    assert "_installNestedSidebarTouchActivate(row, child);" in sessions_js
+    lineage_idx = sessions_js.index("row.title=t('session_lineage_segment_open');")
+    lineage_block = sessions_js[lineage_idx:lineage_idx + 500]
+    assert "await _openNestedSidebarSession(seg);" in lineage_block, (
+        "Lineage segment open must route through _openNestedSidebarSession"
+    )
+
+
+def test_nested_child_session_click_suppresses_parent_row_deferred_tap():
+    """A nested child open must not be overwritten by the parent row's 300ms touch tap."""
+    sessions_js = (REPO / "static" / "sessions.js").read_text(encoding="utf-8")
+    assert "_suppressParentSessionRowTapUntil = Date.now() + 450;" in sessions_js
+    finish_idx = sessions_js.index("const _finishSessionGesture=(clientX,clientY,target,pointerType)=>{")
+    finish_block = sessions_js[finish_idx:finish_idx + 1200]
+    menu_idx = finish_block.index("if(_sessionActionMenu&&!_sessionActionMenu.contains(target)){")
+    nested_idx = finish_block.index("if(_isNestedSidebarActivationTarget(target)){")
+    assert nested_idx < menu_idx, (
+        "Nested child/lineage targets must be ignored before session-action-menu dismiss"
+    )
+    tap_idx = sessions_js.index("_tapTimer=setTimeout(async()=>{")
+    tap_block = sessions_js[tap_idx:tap_idx + 250]
+    assert "if(Date.now()<_suppressParentSessionRowTapUntil) return;" in tap_block
+
+
+def test_nested_child_session_parent_touchstart_ignores_nested_targets():
+    """Parent row touch handlers must not begin a deferred tap when the target is nested UI."""
+    sessions_js = (REPO / "static" / "sessions.js").read_text(encoding="utf-8")
+    touch_idx = sessions_js.index("el.addEventListener('touchstart',(e)=>{")
+    touch_block = sessions_js[touch_idx:touch_idx + 350]
+    assert "if(_isNestedSidebarActivationTarget(e.target)) return;" in touch_block
+    lineage_idx = sessions_js.index("lineageList.className='session-lineage-segments';")
+    lineage_block = sessions_js[lineage_idx:lineage_idx + 250]
+    assert "'touchend'" in lineage_block and "stopImmediatePropagation" in lineage_block
 
 
 def test_new_conversation_shortcut_works_while_busy():

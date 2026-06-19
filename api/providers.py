@@ -78,6 +78,10 @@ _ACCOUNT_USAGE_CACHE_TTL_SECONDS = 45.0
 _ACCOUNT_USAGE_CACHE_MAX_ENTRIES = 64
 _ACCOUNT_USAGE_WORKER_IDLE_SECONDS = 5 * 60
 _ACCOUNT_USAGE_PROVIDERS = frozenset({"openai-codex", "anthropic"})
+_CURSOR_USAGE_PROVIDERS = frozenset({"cursor-acp"})
+_CURSOR_USAGE_CACHE_TTL_SECONDS = 45.0
+_cursor_usage_cache_lock = threading.Lock()
+_cursor_usage_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 
 # Upper bound on simultaneous profile-isolated quota probe subprocesses.
 # Each probe runs a Python child for up to 35 s; capping concurrency prevents
@@ -1662,6 +1666,142 @@ def _fetch_account_usage_with_profile_context(provider: str, *, refresh: bool = 
         return None
 
 
+def _round_cursor_percent(value: Any) -> int | None:
+    number = _quota_number(value)
+    if number is None:
+        return None
+    return max(0, min(100, round(float(number))))
+
+
+def _serialize_cursor_usage_payload(payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not payload:
+        return {
+            "provider": "cursor-acp",
+            "source": "cursor_dashboard",
+            "title": "Cursor included usage",
+            "plan": None,
+            "windows": [],
+            "details": [],
+            "available": False,
+            "unavailable_reason": "Cursor IDE is not signed in on this host.",
+            "fetched_at": _isoformat_utc(datetime.now(timezone.utc)),
+        }
+
+    plan = (payload.get("individualUsage") or {}).get("plan") or {}
+    windows: list[dict[str, Any]] = []
+    for label, key in (
+        ("Total", "totalPercentUsed"),
+        ("API", "apiPercentUsed"),
+        ("Auto", "autoPercentUsed"),
+    ):
+        used_percent = _round_cursor_percent(plan.get(key))
+        if used_percent is None:
+            continue
+        windows.append({
+            "label": label,
+            "used_percent": used_percent,
+            "remaining_percent": max(0, 100 - used_percent),
+            "reset_at": None,
+            "detail": None,
+        })
+
+    if not windows:
+        return {
+            "provider": "cursor-acp",
+            "source": "cursor_dashboard",
+            "title": "Cursor included usage",
+            "plan": None,
+            "windows": [],
+            "details": [],
+            "available": False,
+            "unavailable_reason": "Cursor usage summary did not include plan percentages.",
+            "fetched_at": _isoformat_utc(datetime.now(timezone.utc)),
+        }
+
+    return {
+        "provider": "cursor-acp",
+        "source": "cursor_dashboard",
+        "title": "Cursor included usage",
+        "plan": None,
+        "windows": windows,
+        "details": [],
+        "available": True,
+        "unavailable_reason": None,
+        "fetched_at": _isoformat_utc(datetime.now(timezone.utc)),
+    }
+
+
+def _get_cached_cursor_usage() -> tuple[bool, dict[str, Any] | None]:
+    now = time.monotonic()
+    with _cursor_usage_cache_lock:
+        cached = _cursor_usage_cache.get("cursor-acp")
+        if cached is None:
+            return False, None
+        fetched_at, payload = cached
+        if now - fetched_at <= _CURSOR_USAGE_CACHE_TTL_SECONDS:
+            return True, payload
+        _cursor_usage_cache.pop("cursor-acp", None)
+    return False, None
+
+
+def _set_cached_cursor_usage(payload: dict[str, Any] | None) -> None:
+    now = time.monotonic()
+    with _cursor_usage_cache_lock:
+        _cursor_usage_cache["cursor-acp"] = (now, payload)
+
+
+def _fetch_cursor_usage_summary(*, refresh: bool = False) -> dict[str, Any] | None:
+    if not refresh:
+        cache_hit, cached = _get_cached_cursor_usage()
+        if cache_hit:
+            return cached
+    try:
+        from agent.cursor_usage import fetch_cursor_usage_summary
+
+        payload = fetch_cursor_usage_summary()
+    except Exception:
+        logger.debug("Cursor usage summary fetch failed", exc_info=True)
+        payload = None
+    _set_cached_cursor_usage(payload if isinstance(payload, dict) else None)
+    return payload if isinstance(payload, dict) else None
+
+
+def _provider_cursor_usage_status(provider: str, display_name: str, *, refresh: bool = False) -> dict[str, Any]:
+    payload = _fetch_cursor_usage_summary(refresh=refresh)
+    account_limits = _serialize_cursor_usage_payload(payload)
+    if account_limits and account_limits.get("available"):
+        return {
+            "ok": True,
+            "provider": provider,
+            "display_name": display_name,
+            "supported": True,
+            "status": "available",
+            "label": account_limits.get("title") or "Cursor included usage",
+            "quota": None,
+            "account_limits": account_limits,
+            "message": f"{display_name} included usage loaded.",
+        }
+
+    reason = ""
+    if account_limits:
+        reason = str(account_limits.get("unavailable_reason") or "").strip()
+    message = (
+        f"{display_name} included usage is unavailable. {reason}"
+        if reason
+        else f"{display_name} included usage is unavailable. Sign in to Cursor IDE on this host and try again."
+    )
+    return {
+        "ok": False,
+        "provider": provider,
+        "display_name": display_name,
+        "supported": True,
+        "status": "unavailable",
+        "quota": None,
+        "account_limits": account_limits,
+        "message": message,
+    }
+
+
 def _provider_account_usage_status(provider: str, display_name: str, *, refresh: bool = False) -> dict[str, Any]:
     snapshot = _fetch_account_usage_with_profile_context(provider, refresh=refresh)
     account_limits = _serialize_account_usage_snapshot(snapshot)
@@ -1720,6 +1860,9 @@ def get_provider_quota(provider_id: str | None = None, *, refresh: bool = False)
     display_name = _PROVIDER_DISPLAY.get(provider, provider.replace("-", " ").title())
     if provider in _ACCOUNT_USAGE_PROVIDERS:
         return _provider_account_usage_status(provider, display_name, refresh=refresh)
+
+    if provider in _CURSOR_USAGE_PROVIDERS:
+        return _provider_cursor_usage_status(provider, display_name, refresh=refresh)
 
     if provider != "openrouter":
         detail = "OpenAI/Anthropic rate-limit headers are a follow-up once WebUI captures provider response metadata."

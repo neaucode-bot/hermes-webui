@@ -6870,7 +6870,7 @@ def _get_session_agent_lock(session_id: str) -> threading.Lock:
 _SETTINGS_DEFAULTS = {
     "default_workspace": str(DEFAULT_WORKSPACE),
     "onboarding_completed": False,
-    "send_key": "enter",  # 'enter' or 'ctrl+enter'
+    "send_key": "enter",  # 'enter' | 'enter_always' (Enter sends on mobile too) | 'ctrl+enter'
     "show_token_usage": False,  # show input/output token badge below assistant messages
     "show_quota_chip": False,  # show ambient provider quota chip in composer footer (default off; wide desktop only when enabled, see style.css @media)
     "show_conversation_outline": False,  # show opt-in desktop jump-to-question outline panel
@@ -6894,7 +6894,6 @@ _SETTINGS_DEFAULTS = {
     "chat_activity_display_mode": "compact_worklog",  # compact_worklog | transparent_stream
     "auto_scroll_follow": True,  # follow new output to the bottom while streaming (Codex/Claude-Code-style sticky bottom); the user scrolling up unpins and is respected
     "worklog_details_expanded_default": False,  # opt-in: expand Worklog details by default; default remains folded
-    "pinned_sessions_limit": 3,  # maximum active pinned sessions shown in the sidebar
     "inflight_state_max_sessions": 8,  # max active-stream recovery snapshots kept in browser localStorage
     "inflight_state_max_messages": 24,  # max recent messages kept per recovery snapshot
     "inflight_state_max_tool_calls": 48,  # max recent tool-call records kept per recovery snapshot
@@ -7075,7 +7074,7 @@ _SETTINGS_ALLOWED_KEYS = set(_SETTINGS_DEFAULTS.keys()) - {
     "simplified_tool_calling",
 }
 _SETTINGS_ENUM_VALUES = {
-    "send_key": {"enter", "ctrl+enter"},
+    "send_key": {"enter", "enter_always", "ctrl+enter"},
     "sidebar_density": {"compact", "detailed"},
     "font_size": {"small", "default", "large", "xlarge"},
     "auto_title_refresh_every": {"0", "5", "10", "20"},
@@ -7083,7 +7082,6 @@ _SETTINGS_ENUM_VALUES = {
     "chat_activity_display_mode": {"compact_worklog", "transparent_stream"},
 }
 _SETTINGS_INT_RANGES = {
-    "pinned_sessions_limit": (1, 99),
     "inflight_state_max_sessions": (1, 25),
     "inflight_state_max_messages": (1, 100),
     "inflight_state_max_tool_calls": (1, 200),

@@ -729,9 +729,11 @@ def test_lineage_segment_expansion_static_contract():
     assert "className='session-lineage-segment'" in js
     assert "const segTitle=_sessionDisplayTitle(seg)||t('session_lineage_segment_untitled');" in js
     assert "row.title=t('session_lineage_segment_open');" in js
-    assert "await loadSession(seg.session_id, {skipLineageResolve:true});" in js
-    assert "const openChildSession=async(childSession)=>{" in js
-    assert "await loadSession(childSession.session_id, {skipLineageResolve:true});" in js
+    assert "await _openNestedSidebarSession(seg);" in js
+    assert "const openChildSession=async(childSession)=>_openNestedSidebarSession(childSession);" in js
+    assert "async function _openNestedSidebarSession(sessionRow){" in js
+    assert "await loadSession(sid, {skipLineageResolve:true});" in js
+    assert "if(typeof closeMobileSidebar === 'function') closeMobileSidebar();" in js
     assert "if(!opts.skipLineageResolve && typeof _resolveSessionIdFromSidebarLineage==='function'){" in js
     assert ".session-lineage-count.expandable{" in css
     assert ".session-lineage-count.expandable:hover" in css

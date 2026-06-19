@@ -334,6 +334,9 @@ class TestIndexHtmlIntegration:
         assert "HermesPWA" in src
         assert "launchAction" in src
         assert "promptInstall" in src
+        assert "blockNativeNewWindowShortcut" in src, (
+            "pwa-startup.js must block Cmd/Ctrl+N before the browser opens a new window"
+        )
 
     def test_pwa_new_chat_shortcut_is_handled_at_boot(self):
         src = BOOT.read_text(encoding="utf-8")

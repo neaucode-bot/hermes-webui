@@ -530,6 +530,35 @@ def test_completion_unread_clears_only_when_session_is_opened():
     )
 
 
+def test_load_parent_session_cascades_viewed_to_child_sessions():
+    """Viewing a parent session must cascade viewed state to its child_session subagents
+    so the yellow dot on the parent row does not reappear when the user navigates away."""
+    load_idx = SESSIONS_JS.find("async function loadSession(sid")
+    assert load_idx != -1, "loadSession not found"
+    load_block = SESSIONS_JS[load_idx:SESSIONS_JS.find("function _resolveSessionModelForDisplaySoon", load_idx)]
+
+    assert "_cs.relationship_type === 'child_session'" in load_block, (
+        "loadSession must check relationship_type to identify subagent child sessions"
+    )
+    assert "_cs.parent_session_id === _parentSid" in load_block, (
+        "loadSession must match child sessions by parent_session_id"
+    )
+    cascade_viewed_idx = load_block.find("_setSessionViewedCount(_cs.session_id")
+    cascade_clear_idx = load_block.find("_clearSessionCompletionUnread(_cs.session_id)")
+    parent_viewed_idx = load_block.find("_setSessionViewedCount(S.session.session_id")
+
+    assert cascade_viewed_idx != -1, (
+        "loadSession must call _setSessionViewedCount for each child_session subagent "
+        "so the parent yellow dot clears when the parent is viewed"
+    )
+    assert cascade_clear_idx != -1, (
+        "loadSession must also clear completion unread for each child_session subagent"
+    )
+    assert parent_viewed_idx < cascade_viewed_idx, (
+        "parent must be marked viewed before cascading to children"
+    )
+
+
 def test_historical_sessions_are_not_marked_unread_on_list_render():
     """The explicit unread marker must be event-driven, not initialized by _hasUnreadForSession."""
     has_unread_idx = SESSIONS_JS.find("function _hasUnreadForSession(s)")

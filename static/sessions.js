@@ -1320,6 +1320,18 @@ async function loadSession(sid){
   if(typeof syncTopbar==='function') syncTopbar();
   _setSessionViewedCount(S.session.session_id, Number(data.session.message_count || 0));
   _clearSessionCompletionUnread(S.session.session_id);
+  // Cascade viewed state to child sessions (subagents) so the parent's yellow dot
+  // clears immediately and does not reappear when the user navigates away. Child
+  // sessions spawned *after* this point will still trigger the indicator normally.
+  if (Array.isArray(_allSessions)) {
+    const _parentSid = S.session.session_id;
+    for (const _cs of _allSessions) {
+      if (_cs && _cs.session_id && _cs.parent_session_id === _parentSid && _cs.relationship_type === 'child_session') {
+        _setSessionViewedCount(_cs.session_id, Number(_cs.message_count || 0));
+        _clearSessionCompletionUnread(_cs.session_id);
+      }
+    }
+  }
   try{localStorage.setItem('hermes-webui-session',S.session.session_id);}catch(_){}
   _setActiveSessionUrl(S.session.session_id);
   if(typeof startSessionStream==='function') startSessionStream(S.session.session_id);

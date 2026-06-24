@@ -577,7 +577,13 @@ def test_mobile_sidebar_opens_as_full_screen_surface_with_panel_rail():
 
 
 def test_mobile_rail_click_opens_full_screen_panel_drawer():
-    """Rail clicks on phone should keep the full-screen drawer open for panel switching."""
+    """Rail clicks on phone open the drawer; re-tapping the active icon closes it.
+
+    Tapping a *different* panel icon switches panels and keeps the full-screen
+    drawer open (so the user can navigate between panels). Tapping the *same*
+    icon that is already active while the drawer is open closes it (toggle-off),
+    mirroring the desktop same-panel collapse.
+    """
     panels_js = (REPO / "static" / "panels.js").read_text(encoding="utf-8")
     assert "opts.fromRailClick" in panels_js, (
         "switchPanel() should distinguish rail clicks from programmatic switches"
@@ -595,10 +601,27 @@ def test_mobile_rail_click_opens_full_screen_panel_drawer():
     assert "sidebar.classList.add('mobile-panel-drawer', 'mobile-open')" in switch_panel, (
         "Phone rail clicks should open the panel drawer mode"
     )
-    rail_handler_idx = switch_panel.index("if (opts.fromRailClick && typeof _isDesktopWidth === 'function' && !_isDesktopWidth())")
-    close_sidebar_idx = switch_panel.find("closeMobileSidebar();", rail_handler_idx)
-    assert close_sidebar_idx == -1, "Phone rail clicks should keep the full-screen drawer open for panel switching"
-    assert "overlay.classList.add('visible')" not in switch_panel[rail_handler_idx:], (
+    # The mobile toggle-off block must close the drawer only when the same panel
+    # is re-tapped while the drawer is open — it is guarded by both
+    # prevPanel === nextPanel and the .mobile-open state.
+    assert "prevPanel === nextPanel" in switch_panel, (
+        "Mobile toggle-close must be guarded by prevPanel === nextPanel"
+    )
+    toggle_idx = switch_panel.index("Mobile sidebar drawer toggle")
+    close_sidebar_idx = switch_panel.find("closeMobileSidebar()", toggle_idx)
+    assert close_sidebar_idx != -1, (
+        "Mobile same-panel rail re-tap must close the drawer (toggle-off)"
+    )
+    assert "contains('mobile-open')" in switch_panel[toggle_idx:close_sidebar_idx], (
+        "Mobile toggle-close must check .mobile-open before closing"
+    )
+    # The open-drawer block must still run after the toggle guard so switching to
+    # a *different* panel keeps the drawer open.
+    open_idx = switch_panel.find("sidebar.classList.add('mobile-panel-drawer', 'mobile-open')")
+    assert open_idx > toggle_idx, (
+        "Open-drawer block must come after the toggle-close guard so normal switches still open"
+    )
+    assert "overlay.classList.add('visible')" not in switch_panel[toggle_idx:], (
         "Full-screen phone rail clicks should not show a backdrop that dims the PWA status bar"
     )
 

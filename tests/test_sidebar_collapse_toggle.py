@@ -268,6 +268,37 @@ class TestSwitchPanelGuard:
         assert "opts" in params and "opts" in args, \
             f"Proxy must forward opts to _origSwitchPanel — got params={params!r}, args={args!r}"
 
+    def test_mobile_same_panel_toggle_closes_drawer(self):
+        """Re-tapping the active nav icon on mobile must close the sidebar drawer.
+
+        Mirrors the desktop same-panel collapse (toggleSidebar(true)) but uses
+        closeMobileSidebar() instead. The close must be gated on:
+          1. opts.fromRailClick — programmatic switches are unaffected
+          2. !_isDesktopWidth() — desktop uses the collapse path above
+          3. .mobile-open — only close when the drawer is already open
+          4. prevPanel === nextPanel — only close when the same icon is tapped
+        """
+        fn_start = PANELS_JS.index("async function switchPanel")
+        fn_end = PANELS_JS.index("\n}\n\n// ── Cron panel", fn_start)
+        body = PANELS_JS[fn_start:fn_end]
+
+        idx = body.index("Mobile sidebar drawer toggle")
+        block = body[idx:idx + 900]
+        assert "!_isDesktopWidth()" in block, \
+            "Mobile toggle block must check !_isDesktopWidth()"
+        assert "prevPanel === nextPanel" in block, \
+            "Mobile toggle block must be guarded by prevPanel === nextPanel"
+        assert "contains('mobile-open')" in block, \
+            "Mobile toggle block must check .mobile-open before closing"
+        assert "closeMobileSidebar()" in block, \
+            "Mobile toggle block must call closeMobileSidebar() to toggle off"
+
+        # The toggle-close block must appear BEFORE the open-drawer block so the
+        # early-return short-circuits the drawer-open on same-panel clicks.
+        open_idx = body.index("sidebar.classList.add('mobile-panel-drawer', 'mobile-open')")
+        assert idx < open_idx, \
+            "Mobile toggle-close guard must come before the open-drawer block"
+
 
 # ── HTML contract ──────────────────────────────────────────────────────────
 

@@ -288,6 +288,20 @@ async function switchPanel(name, opts = {}) {
       return false;
     }
   }
+  // ── Mobile sidebar drawer toggle (rail-click only) ──
+  // Mirror the desktop collapse above for phones: re-tapping the rail icon for
+  // the already-active panel while the full-screen drawer is open closes it
+  // (toggle-off). Tapping a *different* panel still keeps the drawer open and
+  // switches panels via the rail-open block further below.
+  if (opts.fromRailClick && typeof _isDesktopWidth === 'function' && !_isDesktopWidth()
+      && prevPanel === nextPanel) {
+    const _mobileSidebar = document.querySelector('.sidebar');
+    if (_mobileSidebar && _mobileSidebar.classList.contains('mobile-open')
+        && typeof closeMobileSidebar === 'function') {
+      closeMobileSidebar();
+      return false;
+    }
+  }
   if (!opts.bypassSettingsGuard && !_beforePanelSwitch(nextPanel)) return false;
   if (prevPanel !== 'settings' && nextPanel === 'settings') _beginSettingsPanelSession();
   // Close any long-lived Kanban SSE stream when leaving the kanban panel
